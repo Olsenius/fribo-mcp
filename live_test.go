@@ -50,23 +50,27 @@ func TestLiveReadOnly(t *testing.T) {
 		day(cfg.StartSeasonDate).Format(dateLayout), day(cfg.EndSeasonDate).Format(dateLayout), inSeason(now, cfg),
 		describeDeadline(cfg.PlowingSchedule.WorkDaysDeadline, "arrival"), earliestGuaranteedArrival(cfg, now))
 
-	stays, err := c.Stays(ctx, id, 500)
+	past, err := c.PastStays(ctx, id, 500)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("stays: %d, upcoming: %d", len(stays), len(upcoming(stays, now)))
-	// Paging: a small page size must still return everything once.
+	future, err := c.UpcomingStays(ctx, id, ct.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	guaranteed := 0
+	for _, s := range future {
+		if s.PlowingGuaranteed {
+			guaranteed++
+		}
+	}
+	t.Logf("earlier stays: %d, upcoming: %d (%d guaranteed)", len(past), len(future), guaranteed)
 	seen := map[string]bool{}
-	for _, s := range stays {
+	for _, s := range past {
 		if seen[s.ID] {
 			t.Fatalf("stay listed twice: paging is off")
 		}
 		seen[s.ID] = true
-	}
-	if len(stays) > 0 {
-		if _, err := c.Stay(ctx, id, stays[0].ID); err != nil {
-			t.Fatalf("stay details: %v", err)
-		}
 	}
 
 	ev, err := c.PlowingHistory(ctx, id, 100)

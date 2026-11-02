@@ -274,7 +274,7 @@ func newServer(a *app) *mcp.Server {
 				return nil, statusOut{}, err
 			}
 			now := nowFunc()
-			stays, err := cc.client.Stays(ctx, cc.cabinID, 200)
+			stays, err := cc.client.UpcomingStays(ctx, cc.cabinID, cc.contract.ID)
 			if err != nil {
 				return nil, statusOut{}, err
 			}
@@ -311,7 +311,7 @@ func newServer(a *app) *mcp.Server {
 				}
 			}
 			if !out.Season.Active {
-				out.Warnings = append(out.Warnings, fmt.Sprintf("Fribo's plowing season is set to %s to %s, so today is outside it. New stays may be rejected until the company sets up the new season.", out.Season.Start, out.Season.End))
+				out.Warnings = append(out.Warnings, fmt.Sprintf("The season in Fribo's settings is %s to %s, so today is outside it. Fribo has still accepted and guaranteed new stays.", out.Season.Start, out.Season.End))
 			}
 			if cc.contract.Status != "Active" {
 				out.Warnings = append(out.Warnings, "the plowing contract is "+cc.contract.Status)
@@ -319,27 +319,27 @@ func newServer(a *app) *mcp.Server {
 			return nil, out, nil
 		})
 
-	mcp.AddTool(s, &mcp.Tool{Name: "list_stays", Description: "List registered stays for a cabin, soonest first. Each stay shows whether plowing is guaranteed.", Annotations: readOnly},
+	mcp.AddTool(s, &mcp.Tool{Name: "list_stays", Description: "List upcoming stays for a cabin, soonest first, and earlier stays with include_past. Each stay shows whether plowing is guaranteed.", Annotations: readOnly},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in staysIn) (*mcp.CallToolResult, staysOut, error) {
-			c, st, err := a.client()
+			cc, err := a.cabinContext(ctx, in.CabinID)
 			if err != nil {
 				return nil, staysOut{}, err
 			}
-			id, err := resolveCabin(ctx, c, st, in.CabinID)
+			stays, err := cc.client.UpcomingStays(ctx, cc.cabinID, cc.contract.ID)
 			if err != nil {
 				return nil, staysOut{}, err
 			}
-			stays, err := c.Stays(ctx, id, 200)
-			if err != nil {
-				return nil, staysOut{}, err
-			}
-			var list []Stay
+			list := upcoming(stays, nowFunc())
 			if in.IncludePast {
-				for _, s := range stays {
-					list = append(list, localize(s))
+				past, err := cc.client.PastStays(ctx, cc.cabinID, 200)
+				if err != nil {
+					return nil, staysOut{}, err
 				}
-			} else {
-				list = upcoming(stays, nowFunc())
+				for _, s := range past {
+					if !slices.ContainsFunc(list, func(u Stay) bool { return u.ID == s.ID }) {
+						list = append(list, localize(s))
+					}
+				}
 			}
 			if n := limitOr(in.Limit, 20); len(list) > n {
 				list = list[:n]
@@ -380,7 +380,7 @@ func newServer(a *app) *mcp.Server {
 			if err != nil {
 				return nil, checkOut{}, err
 			}
-			stays, err := cc.client.Stays(ctx, cc.cabinID, 200)
+			stays, err := cc.client.UpcomingStays(ctx, cc.cabinID, cc.contract.ID)
 			if err != nil {
 				return nil, checkOut{}, err
 			}
@@ -409,8 +409,11 @@ func newServer(a *app) *mcp.Server {
 					return nil, out, err
 				}
 				out.Registered = true
-				if stays, err := cc.client.Stays(ctx, cc.cabinID, 50); err == nil {
+				if stays, err := cc.client.UpcomingStays(ctx, cc.cabinID, cc.contract.ID); err == nil {
 					out.Stay = findStay(stays, p.Arrival)
+				}
+				if out.Stay == nil {
+					out.Assessment.Notes = append(out.Assessment.Notes, "Fribo accepted the stay, but it could not be read back yet; check list_stays")
 				}
 				return nil, out, nil
 			})

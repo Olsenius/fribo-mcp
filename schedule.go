@@ -229,8 +229,10 @@ func assess(p stayPlan, arrivalChanged bool, cfg *PlowingConfig, now time.Time) 
 		set, _ := deadlineSet(p.Departure, cfg)
 		a.Problems = append(a.Problems, "too late to change the departure to this day (it must be changed "+describeDeadline(set, "departure")+")")
 	}
+	// The season in Fribo's settings can be out of date: in November 2026 it
+	// still ended in June, yet new stays were accepted and guaranteed.
 	if !inSeason(p.Arrival, cfg) || !inSeason(p.Departure, cfg) {
-		a.Problems = append(a.Problems, fmt.Sprintf("outside the plowing season Fribo has set up (%s to %s); Fribo may reject the stay",
+		a.Notes = append(a.Notes, fmt.Sprintf("outside the season in Fribo's settings (%s to %s); Fribo has still accepted such stays",
 			day(cfg.StartSeasonDate).Format(dateLayout), day(cfg.EndSeasonDate).Format(dateLayout)))
 	}
 	if len(a.Problems) > 0 {

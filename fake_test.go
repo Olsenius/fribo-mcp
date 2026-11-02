@@ -22,6 +22,8 @@ const (
 	testCabinID  = "22222222-2222-4222-8222-222222222222"
 	testOrgID    = "33333333-3333-4333-8333-333333333333"
 	testStayID   = "44444444-4444-4444-8444-444444444444"
+	// testAgreementID is the cabin's plowing agreement.
+	testAgreementID = "66666666-6666-4666-8666-666666666666"
 )
 
 type fakeFribo struct {
@@ -48,8 +50,10 @@ func fakeJWT(sub string, n int) string {
 
 func newFakeFribo(t *testing.T) *fakeFribo {
 	f := &fakeFribo{t: t, updated: map[string]map[string]any{}, seasonEnd: "2027-06-30T00:00:00.000Z"}
+	// Like the real API, upcoming stays ("_future") are only in the preview
+	// endpoint, and the plain list holds earlier stays.
 	f.stays = []map[string]any{{
-		"id": testStayID, "cabinId": testCabinID,
+		"id": testStayID, "cabinId": testCabinID, "_future": true,
 		"arrival": "2026-12-04T12:00:00.000Z", "departure": "2026-12-06T22:59:59.000Z",
 		"plowingGuaranteed": true, "clipWasConsumed": false, "rejectedDates": []string{},
 		"createdAt": "2026-11-01T18:00:00.000Z", "lastUpdated": "2026-11-01T18:00:00.000Z",
@@ -121,7 +125,7 @@ func (f *fakeFribo) serve(w http.ResponseWriter, r *http.Request) {
 	case r.Method == "GET" && path == "/plowing/"+testCabinID+"/cabinContractPreview":
 		needVersion("2.0")
 		writeAny(w, 200, []map[string]any{
-			{"id": "66666666-6666-4666-8666-666666666666", "contractId": "c1", "status": "Active", "name": "Brøyting", "type": "PlowingContract",
+			{"id": testAgreementID, "contractId": "c1", "status": "Active", "name": "Brøyting", "type": "PlowingContract",
 				"organizationId": testOrgID, "startDate": "2025-07-01T00:00:00.000Z", "endDate": "2028-06-30T00:00:00.000Z"},
 			{"id": "77777777-7777-4777-8777-777777777777", "status": "Active", "name": "Fellesvei", "type": "CommonRoad",
 				"organizationId": "other", "startDate": "2025-07-01T00:00:00.000Z", "endDate": "2028-06-30T00:00:00.000Z"},
@@ -139,7 +143,28 @@ func (f *fakeFribo) serve(w http.ResponseWriter, r *http.Request) {
 		})
 	case r.Method == "GET" && path == "/plowing/customerPresences/"+testCabinID:
 		needVersion("2.0")
-		writeAny(w, 200, map[string]any{"total": len(f.stays), "pageTotal": len(f.stays), "data": f.stays})
+		var past []map[string]any
+		for _, s := range f.stays {
+			if s["_future"] != true {
+				past = append(past, s)
+			}
+		}
+		writeAny(w, 200, map[string]any{"total": len(past), "pageTotal": len(past), "data": past})
+	case r.Method == "GET" && path == "/plowing/customerPresences/"+testCabinID+"/preview":
+		needVersion("2.0")
+		q := r.URL.Query()
+		if q.Get("staysMode") != "OnlyFuture" || q.Get("cabinContractId") != testAgreementID {
+			writeAny(w, 400, map[string]any{"code": "bad_request", "message": "Bad request"})
+			return
+		}
+		var future []map[string]any
+		for _, s := range f.stays {
+			if s["_future"] == true {
+				future = append(future, map[string]any{"id": s["id"], "arrivalDate": s["arrival"], "departureDate": s["departure"],
+					"hasRejectedDates": false, "presenceDatesEdited": false, "visitingCustomer": s["visitingCustomer"]})
+			}
+		}
+		writeAny(w, 200, map[string]any{"total": len(future), "pageTotal": len(future), "data": future})
 	case r.Method == "GET" && strings.HasPrefix(path, "/plowing/customerPresences/"+testCabinID+"/"):
 		id := strings.TrimPrefix(path, "/plowing/customerPresences/"+testCabinID+"/")
 		for _, s := range f.stays {
@@ -155,7 +180,7 @@ func (f *fakeFribo) serve(w http.ResponseWriter, r *http.Request) {
 		json.NewDecoder(r.Body).Decode(&body)
 		f.created = append(f.created, body)
 		f.stays = append([]map[string]any{{
-			"id": "88888888-8888-4888-8888-888888888888", "cabinId": body["cabinId"], "arrival": body["arrival"], "departure": body["departure"],
+			"id": "88888888-8888-4888-8888-888888888888", "cabinId": body["cabinId"], "_future": true, "arrival": body["arrival"], "departure": body["departure"],
 			"plowingGuaranteed": true, "rejectedDates": body["rejectedDays"], "createdAt": time.Now().UTC().Format(time.RFC3339),
 			"visitingCustomer": map[string]any{"id": body["visitingCustomerId"], "firstName": "Kari", "lastName": "private-lastname"},
 		}}, f.stays...)

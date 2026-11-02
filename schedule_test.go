@@ -127,7 +127,8 @@ func TestAssess(t *testing.T) {
 	}
 
 	p, _ = buildPlan("2027-07-02", 13, "2027-07-04", nil)
-	if a := assess(p, true, cfg, now); !strings.Contains(strings.Join(a.Problems, ";"), "plowing season") {
+	// Fribo accepts stays outside the season in its settings, so this is only a note.
+	if a := assess(p, true, cfg, now); !a.PlowingGuaranteed || len(a.Problems) > 0 || !strings.Contains(strings.Join(a.Notes, ";"), "season") {
 		t.Fatalf("out of season: %+v", a)
 	}
 

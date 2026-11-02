@@ -44,8 +44,9 @@ fribo-mcp registers stays against a `PermanentStay`, else the first agreement th
 
 ### Plowing configuration
 
-- `startSeasonDate`, `endSeasonDate`: the plowing season. The portal does not offer dates
-  outside it. In November 2026 the test account's season still ended 2026-06-30.
+- `startSeasonDate`, `endSeasonDate`: the plowing season. In November 2026 the test account's
+  season still ended 2026-06-30, yet stays for November were accepted and guaranteed, both from
+  the portal and from fribo-mcp. fribo-mcp only mentions it as a note.
 - `plowingSchedule.workDaysDeadline` and `weekendsDeadline`, each with `arrivalDeadline`
   (days), `arrivalDeadlineHours` (a timestamp whose local clock time is the cut-off),
   optional `arrivalDeadlineWeekday`, `departureDeadline` and `departureDeadlineHours`.
@@ -68,16 +69,23 @@ fribo-mcp registers stays against a `PermanentStay`, else the first agreement th
 | `PUT /plowing/customerPresences/{stayId}` | 2.0 | `{arrival, departure, rejectedDays, comment: null}` |
 | `DELETE /plowing/customerPresences/{stayId}` | 2.0 | – |
 
-- Pages start at 1 (page 0 gives the same as page 1). The list ignored `size` and returned all
-  stays on page 1; page 2 was empty.
+- **Upcoming stays are only in `/preview`.** In November 2026 the plain list returned the 11
+  stays from the 2025/26 winter and none of the two new ones, with or without
+  `cabinContractId`/`staysMode`. `/preview` with `staysMode=OnlyFuture` and the agreement id from
+  `cabinContractPreview` listed both (`All`/`OnlyPast` answer 400). The preview has only
+  `id, arrivalDate, departureDate, hasRejectedDates, presenceDatesEdited, visitingCustomer`,
+  so fribo-mcp reads each stay with the details call.
+- The plain list's pages start at 1 (page 0 gives the same as page 1). It ignored `size` and
+  returned all stays on page 1; page 2 was empty.
 - A stay: `id, cabinId, arrival, departure, rejectedDates, plowingGuaranteed,
   clipWasConsumed, visitingCustomer {id, firstName, lastName}, createdAt, lastUpdated`.
 - `arrival` is the arrival hour, local time. `departure` is 23:59:59 local on the departure day.
   `rejectedDays` are `YYYY-MM-DD` days within the stay that need no plowing.
 - `visitingCustomerId` is the user registering the stay. Co-owners register their own.
-- Create, update and delete have **not** been called against the real API yet. Bodies and
-  methods come from the portal code. Create answers without the new stay, so fribo-mcp lists
-  the stays afterwards to find it.
+- Create was confirmed against the real API on 2026-11-02: HTTP 200 without the new stay in the
+  answer, so fribo-mcp looks it up through `/preview` afterwards. The stay was guaranteed even
+  though the season in the plowing configuration had ended (see below). Update and delete have
+  not been called against the real API yet; their bodies and methods come from the portal code.
 
 ## History
 

@@ -410,8 +410,34 @@ func (r rawStay) stay() Stay {
 		VisitorID: r.VisitingCustomer.ID, Visitor: r.VisitingCustomer.FirstName, CreatedAt: r.CreatedAt}
 }
 
-// Stays returns the cabin's stays, newest first, reading up to max entries.
-func (c *client) Stays(ctx context.Context, cabinID string, max int) ([]Stay, error) {
+// UpcomingStays returns stays that have not ended, as the portal's dashboard
+// shows them. Only the preview endpoint lists new stays; it holds no
+// guarantee or skipped days, so each stay is read in full.
+func (c *client) UpcomingStays(ctx context.Context, cabinID, agreementID string) ([]Stay, error) {
+	var res struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	path := fmt.Sprintf("/plowing/customerPresences/%s/preview?page=1&size=500&staysMode=OnlyFuture&cabinContractId=%s",
+		url.PathEscape(cabinID), url.QueryEscape(agreementID))
+	if err := c.call(ctx, http.MethodGet, "/plowing/customerPresences/{cabinId}/preview", path, "2.0", nil, &res); err != nil {
+		return nil, err
+	}
+	out := make([]Stay, 0, len(res.Data))
+	for _, r := range res.Data {
+		s, err := c.Stay(ctx, cabinID, r.ID)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *s)
+	}
+	return out, nil
+}
+
+// PastStays returns earlier stays, newest first, reading up to max entries.
+// This list did not include stays registered for the 2026/27 winter.
+func (c *client) PastStays(ctx context.Context, cabinID string, max int) ([]Stay, error) {
 	const size = 50
 	var out []Stay
 	for page := 1; len(out) < max; page++ {
