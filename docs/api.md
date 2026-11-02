@@ -84,8 +84,10 @@ fribo-mcp registers stays against a `PermanentStay`, else the first agreement th
 - `visitingCustomerId` is the user registering the stay. Co-owners register their own.
 - Create was confirmed against the real API on 2026-11-02: HTTP 200 without the new stay in the
   answer, so fribo-mcp looks it up through `/preview` afterwards. The stay was guaranteed even
-  though the season in the plowing configuration had ended (see below). Update and delete have
-  not been called against the real API yet; their bodies and methods come from the portal code.
+  though the season in the plowing configuration had ended (see below).
+- Delete was confirmed against the real API on 2026-11-02: HTTP 204, and the stay was gone
+  from `/preview` afterwards. Update has not been called against the real API yet; its body
+  and method come from the portal code.
 
 ## History
 
