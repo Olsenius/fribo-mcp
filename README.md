@@ -58,6 +58,8 @@ login is written to disk.
 
 Run the server behind [mcp-gateway](https://github.com/Olsenius/mcp-gateway) for remote access.
 The gateway adds OAuth, and its admin page shows these settings as a form with a **Test** button.
+The [gateway's Compose example](https://github.com/Olsenius/mcp-gateway#quick-start-docker-compose) runs the gateway, this server and the other MCP servers,
+plus Tailscale Funnel. To develop the server together with the gateway, use [mcp-workspace](https://github.com/Olsenius/mcp-workspace).
 
 | Endpoint | |
 |---|---|
